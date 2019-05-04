@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>统计图</title>
+    <style>
+        html,
+        body,
+        #container {
+            font-size: 12px;
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* 图例样式 */
+        .legend {
+            position: absolute;
+            top: 40px;
+            left: 30px;
+        }
+
+        .legend ul {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+
+        .color-item {
+            width: 60px;
+            height: 20px;
+            display: inline-block;
+        }
+
+        .label-item {
+            display: inline-block;
+            width: 60px;
+            margin-left: -2px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div id="container" class="container"></div>
+
+<div class="legend">
+    <ul class="colors" id="legend-color"></ul>
+    <ul class="labels" id="legend-label"></ul>
+</div>
+<div class="info" style="width: 300px;">
+</div>
+
+<div style="position:absolute;bottom:40px;font-size:18px;text-align: center;width:100%;height:40px">
+    <span id="val"></span>
+    <div id="title" style="display:none;font-size:18px;color:darkorchid;background-color:lightblue;padding:10px;opacity: 0.9;"></div>
+</div>
+
+<div style="position: absolute;left:0px;top:0px;width:100%;background-color:lightgrey">
+<button id="pannelBtn" value="Show" onclick="pannelSetting();" style="background-color:teal;color:white;">&lt;&lt; Hide Settings</button>
+
+<div id="setting" isShow="true" style="padding:10px">
+数据:<br/>
+<textarea id="data" style="width:100%;height:100px">
+籍贯,经纬度,合计,第一
+北平,"116.322056,39.8949100000",100,1
+上海,"121.473658,31.2303780000",20,5
+山西,"112.562398,37.8735310000",44,2
+</textarea>
+名称字段:<input id="s-name" value="籍贯" placeholder="名称字段名" size="12" />
+位置字段:<input id="location" value="经纬度" placeholder="经纬度字段名" size="12" />
+统计字段:<input id="count" value="第一届总数,第二届总数,第三届总数,第四届总数,第五届总数,第六届总数,第七届总数,第八届总数,第九届总数,第十届总数,第十一届总数,第十二届总数,第十三届总数,第十四届总数,第十五届总数,第十六届总数,第十七届总数,第十八届总数,合计" placeholder="统计数值字段名" size="12" />
+<br/>
+阶梯颜色:<input id="colors" value="#D8D8D8,#E0F8E6,#81F781,#A9E2F3,#F5D0A9,#F5A9A9,#F5A9F2,#FFFF00,#FFBF00,#DF7401,#DF0101,#A901DB,#7401DF" placeholder="阶梯颜色" size="90" />
+<br/>
+形状:
+<select id="shape" value="district">
+<option value="district">行政区</option>
+<option value="hexagon">蜂窝</option>
+<option value="rectangle">正方形</option>
+</select>
+半径:<input id="radius" value="80000" placeholder="" size="12" />
+高度:<input id="maxheight" value="800000" placeholder="" size="12" />
+<br/>
+<button name="Render" value="Render" onclick="show();" style="background-color: darkcyan;color:white;padding:6px">Render</button>
+</div>
+</div>
+
+<script src="http://webapi.amap.com/loca?v=1.2.0&key=62aef9ccfd70de8c4f860b94abf07f5f"></script>
+<script src="http://a.amap.com/Loca/static/dist/jquery.min.js"></script>
+
+<script>
+    function pannelSetting() {
+        var setting = $("#setting");
+        if(setting.attr("isShow") == "true") {
+            $("#pannelBtn").text("Show Settings >>");
+            setting.attr("isShow", "false");
+            setting.hide();
+        } else {
+            $("#pannelBtn").text("<< Hide Settings");
+            setting.attr("isShow", "true");
+            setting.show();
+        }
+    }
+
+var map = Loca.create('container', {
+    version: '1.4.13',
+    mapStyle: 'amap://styles/twilight',
+    features: ['bg', 'road'],
+    center: [107.4976, 32.1697],
+    pitch: 50,
+    zoom: 4,
+    viewMode: '3D'
+});
+
+map.on('mapload', function () {
+    map.getMap().plugin(['AMap.ControlBar'], function () {
+        var controlBar = new AMap.ControlBar();
+        map.getMap().addControl(controlBar);
+    });
+});
+
+var layer = null;
+var dataList = [];
+
+function show() {
+    pannelSetting();
+    var data = $("#data").val();
+    var colLoc = $("#location").val();
+    var colCount = $("#count").val();
+    var colors = $("#colors").val().split(",");
+    var shape = $("#shape").val();
+    var radius = parseInt($("#radius").val());
+    var height = parseInt($("#maxheight").val());
+
+    dataList = data.split('\n');
+
+    var cnts = colCount.split(",");
+    var idx = 0;
+    loop();
+    function loop() {
+        if(idx >= cnts.length) {
+            return;
+        }
+        colCount = cnts[idx];
+        idx++;
+        console.log(idx)
+        $("#title").text(colCount).show();
+        render();
+
+        setTimeout(function() {
+            loop();
+        }, 1500);
+    }
+
+    function render(){
+        $("#val").text("");
+        $(".legend").hide();
+        if(layer) {
+            layer.destroy();
+            layer = null;
+        }
+
+        layer = Loca.visualLayer({
+            container: map,
+            eventSupport: true,
+            type: 'heatmap',
+            shape: shape
+        });
+
+        layer.on('legendupdate', function (ev) {
+            console.log("update");
+            var colorLegend = ev.colorLegend;
+            initLegend(colorLegend);
+        });
+
+        layer.on('mousemove', function (ev) {
+            updateInfo(ev);
+        });
+
+        layer.setOptions({
+            unit: 'meter',
+            heightUnit: 'meter',
+            mode: 'sum',
+            style: {
+                radius: radius,
+                height: [0, height],
+                color:  colors
+            }
+        });
+
+        layer.setData(data, {
+            type: 'csv',
+            lnglat: colLoc,
+            value: colCount
+        });
+
+        layer.render();
+    }
+}
+
+function initLegend(colorLegend) {
+    $(".legend").show();
+    var legends = colorLegend.map(function (item) {
+        return `<li class="color-item" style="background-color: ${item.color}"></li>`
+    });
+
+    var ranges = colorLegend.map((item, index) => {
+        // range 可能为小数，可以自行取整计算
+        item.range[0] = Math.round(item.range[0]);
+        item.range[1] = Math.round(item.range[1]);
+
+        if (index == colorLegend.length - 1) {
+            return `<li class="label-item">${item.range[0]}</li><li class="label-item">${item.range[1]}</li>`;
+        }
+        return `<li class="label-item">${item.range[0]}</li>`;
+    });
+
+    document.getElementById('legend-color').innerHTML = legends.join('');
+    document.getElementById('legend-label').innerHTML = ranges.join('');
+}
+
+function updateInfo(ev) {
+    var sName = $("#s-name").val();
+    var points = ev.feature.points;
+    var title = "";
+    var point = points[0];
+    for(var i=0; i<points.length; i++) {
+        title += points[i].rawData[sName] + "(" + points[i].value + ")";
+    }
+    $("#val").text(title);
+}
+</script>
+</body>
+</html>
